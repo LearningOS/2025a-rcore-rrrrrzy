@@ -4,6 +4,9 @@ use crate::{
     timer::get_time_us,
 };
 
+use crate::task;
+use core::ptr;
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -41,5 +44,19 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 // TODO: implement the syscall
 pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     trace!("kernel: sys_trace");
-    -1
+    match _trace_request {
+        0 => {
+            let find_int = _id as *const u8;
+            unsafe { *find_int as isize }
+        }
+        1 => {
+            let write_ptr = _id as *mut u8;
+            unsafe {
+                ptr::write_volatile(write_ptr, _data as u8);
+            }
+            0
+        }
+        2 => task::TASK_MANAGER.get_syscall_times(_id),
+        _ => -1,
+    }
 }

@@ -17,6 +17,7 @@ mod task;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::syscall;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -45,6 +46,8 @@ pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    /// syscall times
+    pub syscall_count: [isize; syscall::SYSCALL_COUNT],
 }
 
 lazy_static! {
@@ -65,6 +68,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    syscall_count: [0;syscall::SYSCALL_COUNT],
                 })
             },
         }
@@ -135,8 +139,69 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
-}
 
+    /// syscall times count
+    pub fn syscall_counter(&self, syscall_id: usize) {
+        match syscall_id {
+            syscall::SYSCALL_WRITE => {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[0] += 1;
+            }
+            syscall::SYSCALL_EXIT => {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[1] += 1;
+            }
+            syscall::SYSCALL_YIELD => {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[2] += 1;
+            }
+            syscall::SYSCALL_GET_TIME => {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[3] += 1;
+            }
+            syscall::SYSCALL_TRACE => {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[4] += 1;
+            }
+            _ => {}
+        }
+    }
+    /// get syscall times
+    pub fn get_syscall_times(&self, syscall_id: usize) -> isize {
+        unsafe {
+            if IS_TRACE_CALLED == 0 {
+                let mut inner = self.inner.exclusive_access();
+                inner.syscall_count[0] = 0;
+                inner.syscall_count[1] = 0;
+                IS_TRACE_CALLED = 1;
+            }
+        }
+        match syscall_id {
+            syscall::SYSCALL_WRITE => {
+                let inner = self.inner.exclusive_access();
+                inner.syscall_count[0]
+            }
+            syscall::SYSCALL_EXIT => {
+                let inner = self.inner.exclusive_access();
+                inner.syscall_count[1]
+            }
+            syscall::SYSCALL_YIELD => {
+                let inner = self.inner.exclusive_access();
+                inner.syscall_count[2]
+            }
+            syscall::SYSCALL_GET_TIME => {
+                let inner = self.inner.exclusive_access();
+                inner.syscall_count[3]
+            }
+            syscall::SYSCALL_TRACE => {
+                let inner = self.inner.exclusive_access();
+                inner.syscall_count[4]
+            }
+            _ => -1,
+        }
+    }
+}
+static mut IS_TRACE_CALLED: usize = 0;
 /// Run the first task in task list.
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
