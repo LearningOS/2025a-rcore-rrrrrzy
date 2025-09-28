@@ -1,6 +1,9 @@
 //! Process management syscalls
-use crate::task::{change_program_brk, exit_current_and_run_next, suspend_current_and_run_next};
-
+use crate::mm::translated_byte_buffer;
+use crate::task::{
+    change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
+};
+use crate::timer::get_time_us;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -22,12 +25,40 @@ pub fn sys_yield() -> isize {
     0
 }
 
+impl TimeVal {
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            core::slice::from_raw_parts(
+                self as *const Self as *const u8,
+                core::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    -1
+    let us = get_time_us();
+    let tv = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+    let tv_b = tv.as_bytes();
+    let slices = translated_byte_buffer(
+        current_user_token(),
+        _tz as *const u8,
+        core::mem::size_of::<TimeVal>(),
+    );
+    let mut offset = 0;
+    for slice in slices {
+        let len = slice.len();
+        slice.copy_from_slice(&tv_b[offset..offset + len]);
+        offset += len;
+    }
+    0
 }
 
 /// TODO: Finish sys_trace to pass testcases
