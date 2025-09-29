@@ -24,6 +24,7 @@ pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
 
+use crate::syscall;
 /// The task manager, where all the tasks are managed.
 ///
 /// Functions implemented on `TaskManager` deals with all task state transitions
@@ -46,6 +47,8 @@ struct TaskManagerInner {
     tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
     current_task: usize,
+    /// called sys times
+    systrace: [isize; syscall::SYSCALL_COUNT],
 }
 
 lazy_static! {
@@ -64,6 +67,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    systrace: [0;syscall::SYSCALL_COUNT],
                 })
             },
         }
@@ -71,6 +75,54 @@ lazy_static! {
 }
 
 impl TaskManager {
+    /// count syscall times
+    pub fn syscall_count(&self, syscall_type: usize) {
+        let mut inner = self.inner.exclusive_access();
+        match syscall_type {
+            syscall::SYSCALL_WRITE => {
+                inner.systrace[0] += 1;
+            }
+            syscall::SYSCALL_EXIT => {
+                inner.systrace[1] += 1;
+            }
+            syscall::SYSCALL_YIELD => {
+                inner.systrace[2] += 1;
+            }
+            syscall::SYSCALL_GET_TIME => {
+                inner.systrace[3] += 1;
+            }
+            syscall::SYSCALL_SBRK => {
+                inner.systrace[4] += 1;
+            }
+            syscall::SYSCALL_MUNMAP => {
+                inner.systrace[5] += 1;
+            }
+            syscall::SYSCALL_MMAP => {
+                inner.systrace[6] += 1;
+            }
+            syscall::SYSCALL_TRACE => {
+                inner.systrace[7] += 1;
+            }
+            _ => {}
+        }
+    }
+
+    /// get systrace count
+    pub fn get_syscall_count(&self, syscall_type: usize) -> isize {
+        let inner = self.inner.exclusive_access();
+        match syscall_type {
+            syscall::SYSCALL_WRITE => inner.systrace[0],
+            syscall::SYSCALL_EXIT => inner.systrace[1],
+            syscall::SYSCALL_YIELD => inner.systrace[2],
+            syscall::SYSCALL_GET_TIME => inner.systrace[3],
+            syscall::SYSCALL_SBRK => inner.systrace[4],
+            syscall::SYSCALL_MUNMAP => inner.systrace[5],
+            syscall::SYSCALL_MMAP => inner.systrace[6],
+            syscall::SYSCALL_TRACE => inner.systrace[7],
+            _ => -1,
+        }
+    }
+
     /// Run the first task in task list.
     ///
     /// Generally, the first task in task list is an idle task (we call it zero process later).

@@ -271,3 +271,20 @@ where
 }
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;
+
+// pub fn translated_refmut<T>(
+//     token: usize,
+//     ptr: *mut T
+// ) -> Result<&'static mut T, ()> {
+//     let addr = ptr as usize;
+//     if addr % core::mem::align_of::<T>() != 0 {
+//         return Err(());
+//     }
+//     let page_table = PageTable::from_token(token);
+//     // let vpn: VirtPageNum = .into();
+//     let pa = match page_table.translate(VirtAddr::from(addr).into()) {
+//         Some(pa) => {pa.ppn()}
+//         None => {return Err(());}
+//     };
+//     // let kernel_va = 
+// }
